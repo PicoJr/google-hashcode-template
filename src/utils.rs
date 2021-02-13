@@ -1,11 +1,10 @@
 #![allow(dead_code)]
 use log::error;
 use nom::bytes::complete::{tag, take_while1, take_while_m_n};
-use nom::combinator::map_res;
-use nom::error::{context, convert_error, ErrorKind, ParseError, VerboseError};
+use nom::combinator::{map_res, verify};
+use nom::error::{context, convert_error, VerboseError};
 use nom::multi::separated_list1;
 use nom::sequence::terminated;
-use nom::Err;
 use nom::IResult;
 
 pub(crate) type N = usize;
@@ -40,16 +39,10 @@ pub(crate) fn number_list_line_verbose(s: &str) -> Res<&str, Vec<N>> {
 }
 
 fn number_list_exact(s: &str, expected_size: usize) -> Res<&str, Vec<N>> {
-    separated_list1(single_space, positive_number)(s).and_then(|(remaining, numbers)| {
-        if numbers.len() != expected_size {
-            Err(Err::Error(VerboseError::from_error_kind(
-                remaining,
-                ErrorKind::Count,
-            )))
-        } else {
-            Ok((remaining, numbers))
-        }
-    })
+    verify(
+        separated_list1(single_space, positive_number),
+        |s: &[N]| s.len() == expected_size,
+    )(s)
 }
 
 /// Parse a space-separated list of exactly `expected_size` (positive) integers written on a line ending with "\n"
@@ -80,7 +73,7 @@ mod tests {
     use crate::utils::{
         number_list, number_list_exact, number_list_line, number_list_line_exact, verbose_error,
     };
-    use nom::error::ErrorKind::Count;
+    use nom::error::ErrorKind::Verify;
     use nom::error::VerboseError;
     use nom::error::VerboseErrorKind::{Context, Nom};
 
@@ -116,7 +109,7 @@ mod tests {
             nbl,
             Err(nom::Err::Error(VerboseError {
                 errors: vec![
-                    ("\n", Nom(Count)),
+                    ("42 43 44\n", Nom(Verify)),
                     ("42 43 44\n", Context("parsing exact numbers of integers"))
                 ]
             }))
