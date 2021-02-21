@@ -8,8 +8,6 @@ edition = "2018"
 
 [dependencies]
 nom = "6.1.0"
-# cf https://github.com/myrrlyn/funty/issues/3
-funty = "=1.1.0"
 clap = "2.33.3"
 anyhow = "1.0"
 log = "0.4"
