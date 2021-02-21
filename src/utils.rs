@@ -10,7 +10,7 @@ use nom::IResult;
 pub(crate) type N = usize;
 pub type Res<T, U> = IResult<T, U, VerboseError<T>>;
 
-fn non_space(input: &str) -> Res<&str, &str> {
+fn non_space_or_unix_eol(input: &str) -> Res<&str, &str> {
     take_while1(|c: char| c != ' ' && c != '\n')(input)
 }
 
@@ -27,7 +27,7 @@ fn positive_number(input: &str) -> Res<&str, N> {
 }
 
 fn str_list(s: &str) -> Res<&str, Vec<&str>> {
-    separated_list1(single_space, non_space)(s)
+    separated_list1(single_space, non_space_or_unix_eol)(s)
 }
 
 fn number_list(s: &str) -> Res<&str, Vec<N>> {
@@ -42,7 +42,7 @@ fn number_list_exact(s: &str, expected_size: usize) -> Res<&str, Vec<N>> {
 }
 
 fn str_list_exact(s: &str, expected_size: usize) -> Res<&str, Vec<&str>> {
-    verify(separated_list1(single_space, non_space), |s: &[&str]| {
+    verify(separated_list1(single_space, non_space_or_unix_eol), |s: &[&str]| {
         s.len() == expected_size
     })(s)
 }
