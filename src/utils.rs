@@ -10,6 +10,10 @@ use nom::IResult;
 pub(crate) type N = usize;
 pub type Res<T, U> = IResult<T, U, VerboseError<T>>;
 
+fn non_space(input: &str) -> Res<&str, &str> {
+    take_while1(|c: char| c != ' ' && c != '\n')(input)
+}
+
 fn number(input: &str) -> Res<&str, &str> {
     context("number", take_while1(|c: char| c.is_digit(10)))(input)
 }
@@ -22,8 +26,52 @@ fn positive_number(input: &str) -> Res<&str, N> {
     map_res(number, |out| N::from_str_radix(out, 10))(input)
 }
 
+fn str_list(s: &str) -> Res<&str, Vec<&str>> {
+    separated_list1(single_space, non_space)(s)
+}
+
 fn number_list(s: &str) -> Res<&str, Vec<N>> {
     separated_list1(single_space, positive_number)(s)
+}
+
+fn number_list_exact(s: &str, expected_size: usize) -> Res<&str, Vec<N>> {
+    verify(
+        separated_list1(single_space, positive_number),
+        |s: &[N]| s.len() == expected_size,
+    )(s)
+}
+
+fn str_list_exact(s: &str, expected_size: usize) -> Res<&str, Vec<&str>> {
+    verify(separated_list1(single_space, non_space), |s: &[&str]| {
+        s.len() == expected_size
+    })(s)
+}
+
+/// Parse a space-separated list of non-space characters written on a line ending with "\n"
+pub(crate) fn str_list_line(s: &str) -> Res<&str, Vec<&str>> {
+    terminated(str_list, tag("\n"))(s)
+}
+
+/// Parse a space-separated list of non-space characters written on a line ending with "\n"
+///
+/// logs errors if any
+pub(crate) fn str_list_line_verbose(s: &str) -> Res<&str, Vec<&str>> {
+    verbose_error(s, str_list_line(s))
+}
+
+/// Parse a space-separated list of exactly `expected_size` non-space characters written on a line ending with "\n"
+pub(crate) fn str_list_line_exact(s: &str, expected_size: usize) -> Res<&str, Vec<&str>> {
+    context(
+        "parsing exact numbers of str",
+        terminated(|s| str_list_exact(s, expected_size), tag("\n")),
+    )(s)
+}
+
+/// Parse a space-separated list of exactly `expected_size` non-space characters written on a line ending with "\n"
+///
+/// logs errors if any
+pub(crate) fn str_list_line_exact_verbose(s: &str, expected_size: usize) -> Res<&str, Vec<&str>> {
+    verbose_error(s, str_list_line_exact(s, expected_size))
 }
 
 /// Parse a space-separated list of (positive) integers written on a line ending with "\n"
@@ -36,13 +84,6 @@ pub(crate) fn number_list_line(s: &str) -> Res<&str, Vec<N>> {
 /// logs errors if any
 pub(crate) fn number_list_line_verbose(s: &str) -> Res<&str, Vec<N>> {
     verbose_error(s, number_list_line(s))
-}
-
-fn number_list_exact(s: &str, expected_size: usize) -> Res<&str, Vec<N>> {
-    verify(
-        separated_list1(single_space, positive_number),
-        |s: &[N]| s.len() == expected_size,
-    )(s)
 }
 
 /// Parse a space-separated list of exactly `expected_size` (positive) integers written on a line ending with "\n"
@@ -71,11 +112,30 @@ pub(crate) fn verbose_error<'a, U>(s: &str, res: Res<&'a str, U>) -> Res<&'a str
 #[cfg(test)]
 mod tests {
     use crate::utils::{
-        number_list, number_list_exact, number_list_line, number_list_line_exact, verbose_error,
+        number_list, number_list_exact, number_list_line, number_list_line_exact, str_list,
+        str_list_line, str_list_line_exact, verbose_error,
     };
     use nom::error::ErrorKind::Verify;
     use nom::error::VerboseError;
     use nom::error::VerboseErrorKind::{Context, Nom};
+
+    #[test]
+    fn test_str_list() {
+        let sl = str_list("a b cd");
+        assert_eq!(sl, Ok(("", vec!["a", "b", "cd"])))
+    }
+
+    #[test]
+    fn test_str_list_line() {
+        let sl = str_list_line("a b cd\n");
+        assert_eq!(sl, Ok(("", vec!["a", "b", "cd"])))
+    }
+
+    #[test]
+    fn test_str_list_line_exact() {
+        let sl = str_list_line_exact("a bc d\n", 3);
+        assert_eq!(sl, Ok(("", vec!["a", "bc", "d"])))
+    }
 
     #[test]
     fn test_number_list() {
